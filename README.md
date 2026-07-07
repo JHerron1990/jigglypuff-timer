@@ -38,6 +38,25 @@ Place your media assets into an assets/ directory at the project root:
 - assets/lullaby.mp3 — The loopable background melody.
 - assets/jigglypuff.gif — The animated visual asset.
 
+## Repository Structure
+
+```bash
+jigglypuff-timer/
+├── assets/
+│   ├── jigglypuff.gif     # Application graphical asset
+│   └── lullaby.mp3        # Loopable audio track
+├── tests/
+│   ├── __init__.py        # Test package marker
+│   └── test_engine.py     # Unit tests for the TimerEngine math
+├── audio.py               # Legacy system reference (or audio helper)
+├── engine.py              # Pure mathematical volume decay logic
+├── LICENSE                # Project distribution rights and permissions
+├── main.py                # Main Pygame visual event loop & CLI entrypoint
+├── pyproject.toml         # Comprehensive project metadata & lock state
+├── system.py              # Native Windows API execution scripts
+└── uv.lock                # Deterministic dependency lockfile            
+```
+
 ## Usage
 Run the script natively using uv run. You can configure the timer windows dynamically using CLI flags.
 
@@ -49,6 +68,17 @@ uv run main.py
 uv run main.py -d 0.25 -f 0.083
 ```
 
+## CLI Arguments
+
+| Flag | Long Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `-d` | `--duration` | `float` | `1.0` | Total countdown runtime in minutes. |
+| `-f` | `--fade` | `float` | `0.2` | Window duration in minutes over which audio fades out. |
+| `-a` | `--audio` | `str` | `assets/lullaby.mp3` | Local file path to the audio track. |
+| `-g` | `--gif` | `str` | `assets/jigglypuff.gif` | Local file path to the animated GIF. |
+
+> **Note:** Pressing the `Escape` key at any point during fullscreen execution triggers an immediate, surgical override, cleanly restoring the desktop.
+
 ## Development & Quality Control
 Code quality and style constraints are rigorously enforced using Ruff.
 
@@ -59,3 +89,6 @@ uv run ruff check
 # Automatically resolve fixable lint issues
 uv run ruff check --fix
 ```
+
+## License
+This project is licensed under the MIT Licence.
