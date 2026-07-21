@@ -1,4 +1,4 @@
-# jigglypuff-timer
+# Jigglypuff Timer
 
 A disciplined, event-driven sleep timer and screen manager built using Python, `uv`, and Pygame. The utility plays an audio lullaby loop paired with a centered GIF animation, mathematically fades out the audio over a customisable window, executes a 10-second total screen blackout, and cleanly restores the system desktop.
 
@@ -12,7 +12,7 @@ The application operates as a single-process event loop driven by Pygame, operat
 
 2. **Blackout Phase:** Upon timer expiration, audio threads are safely terminated, and the canvas transitions to a pure pitch-black state (`0, 0, 0`) for exactly 10 seconds before restoring cursor visibility and exiting.
 
-## 🚀 Environment Setup
+## Environment Setup
 
 This project uses `uv` for blazing-fast, deterministic dependency management. 
 

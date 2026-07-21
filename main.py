@@ -1,7 +1,9 @@
-"""A graphical Jigglypuff Sleep Timer with an animated GIF and blackout sequence."""
+"""A graphical Jigglypuff Sleep Timer featuring a radial progress ring UI."""
 
 import argparse
 import logging
+import math
+import os
 import sys
 import time
 import gif_pygame
@@ -15,50 +17,74 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# UI Design Palette (Jigglypuff Theme)
+COLOR_BG = (42, 28, 36)           # Deep, dark pastel plum
+COLOR_TEXT_MAIN = (255, 230, 235) # Creamy pastel pink for countdown display
+COLOR_RING_BG = (65, 45, 56)      # Subdued tracking rail ring
+COLOR_BAR_FILL = (0, 168, 181)    # Luminous teal-blue matching Jigglypuff's eyes
+COLOR_BAR_FADE = (175, 90, 105)   # Warm rose shadow used during fade window
+
+
+def verify_assets(*asset_paths: str) -> None:
+    """Ensure all required media and font files exist before initialising Pygame."""
+    missing = [path for path in asset_paths if not os.path.exists(path)]
+    if missing:
+        logger.error("Missing required assets or fonts:")
+        for path in missing:
+            logger.error(f"  ❌ {path}")
+        sys.exit(1)
+
+
+def draw_radial_progress(surface: pygame.Surface, rect: pygame.Rect, progress: float, color: tuple) -> None:
+    """Draw a clockwise radial progress arc starting at 12 o'clock."""
+    if progress <= 0:
+        return
+        
+    # Pygame arc angles increase anti-clockwise from 3 o'clock (0 rad).
+    # Shift by -pi/2 to start at 12 o'clock and sweep clockwise.
+    start_angle = -math.pi / 2
+    end_angle = start_angle + (2 * math.pi * progress)
+    
+    pygame.draw.arc(surface, color, rect, start_angle, end_angle, width=8)
+
 
 def run_timer(duration_mins: float, fade_mins: float, audio_path: str, gif_path: str) -> None:
-    """Initialises a fullscreen window, plays a loop, and transitions to a blackout."""
-    # Convert input settings to seconds
-    duration_secs = duration_mins * 60
-    fade_secs = fade_mins * 60
+    """Initialises a fullscreen window and executes the timer loop."""
+    font_bold_path = "assets/GoogleSans-Bold.ttf"
+    font_regular_path = "assets/GoogleSans-Regular.ttf"
+    verify_assets(audio_path, gif_path, font_bold_path, font_regular_path)
 
-    # Instantiate our pure mathematical state engine
     try:
-        engine = TimerEngine(duration_secs, fade_secs)
-    except ValueError as e:
-        logger.error(f"Configuration error: {e}")
+        engine = TimerEngine(duration_mins * 60, fade_mins * 60)
+    except ValueError as err:
+        logger.error(f"Configuration error: {err}")
         sys.exit(1)
 
     pygame.init()
     pygame.mixer.init()
+    pygame.font.init()
 
-    # Initialise a borderless fullscreen window matching native resolution
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     pygame.display.set_caption("Jigglypuff Lullaby Room")
-    screen_width, screen_height = screen.get_size()
+    screen_w, screen_h = screen.get_size()
     
-    # Hide the system cursor inside our canvas space
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
 
-    # Load media files
-    try:
-        pygame.mixer.music.load(audio_path)
-        jiggly_gif = gif_pygame.load(gif_path)
-    except FileNotFoundError as e:
-        logger.error(f"Asset file error: {e}")
-        pygame.quit()
-        sys.exit(1)
+    font_large = pygame.font.Font(font_bold_path, 48)
+    pygame.mixer.music.load(audio_path)
+    jiggly_gif = gif_pygame.load(gif_path)
 
-    # Centre position calculations for the GIF animation
+    # Offset character and timer to sit comfortably in top/bottom screen halves
     gif_w, gif_h = jiggly_gif.get_width(), jiggly_gif.get_height()
-    center_x = (screen_width - gif_w) // 2
-    center_y = (screen_height - gif_h) // 2
+    jiggly_pos = ((screen_w - gif_w) // 2, (screen_h // 2) - gif_h - 20)
 
-    # Start the loops
+    center_x, center_y = screen_w // 2, (screen_h // 2) + 120
+    radius = 90
+    arc_rect = pygame.Rect(center_x - radius, center_y - radius, radius * 2, radius * 2)
+
     pygame.mixer.music.play(loops=-1)
     start_time = time.time()
-    
     logger.info("Jigglypuff has entered the screen...")
     
     running = True
@@ -69,43 +95,39 @@ def run_timer(duration_mins: float, fade_mins: float, audio_path: str, gif_path:
         current_time = time.time()
         elapsed_secs = current_time - start_time
         
-        # Check system window events to ensure safe exits
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    logger.info("Override triggered via Escape key.")
-                    running = False
 
         if not in_blackout:
-            # Query our engine for the volume state based on pure elapsed time
-            volume = engine.get_volume(elapsed_secs)
-            pygame.mixer.music.set_volume(volume)
+            pygame.mixer.music.set_volume(engine.get_volume(elapsed_secs))
+            ui = engine.get_ui_metrics(elapsed_secs)
 
-            # Stage 1: Active Playback and Fading Loop
-            if elapsed_secs >= duration_secs:
-                # Transition to blackout state
+            if ui["phase"] == "BLACKOUT":
                 logger.info("Timer expired. Starting 10-second blackout phase...")
                 pygame.mixer.music.stop()
                 in_blackout = True
                 blackout_end_time = current_time + 10.0
             else:
-                # Render Phase: Dark background and centred animated GIF
-                screen.fill((20, 20, 30))
-                jiggly_gif.render(screen, (center_x, center_y))
+                screen.fill(COLOR_BG)
+                jiggly_gif.render(screen, jiggly_pos)
+                pygame.draw.circle(screen, COLOR_RING_BG, (center_x, center_y), radius, width=8)
+
+                arc_color = COLOR_BAR_FADE if ui["phase"] == "FADING" else COLOR_BAR_FILL
+                draw_radial_progress(screen, arc_rect, ui["progress"], arc_color)
+
+                time_surface = font_large.render(ui["time_string"], True, COLOR_TEXT_MAIN)
+                text_rect = time_surface.get_rect(center=(center_x, center_y))
+                screen.blit(time_surface, text_rect)
         else:
-            # Stage 2: The Blackout Window
             if current_time >= blackout_end_time:
                 running = False
             else:
-                # Render Phase: Complete pitch black canvas
                 screen.fill((0, 0, 0))
 
         pygame.display.flip()
-        clock.tick(60)  # Keep execution locked at 60 FPS
+        clock.tick(60)
 
-    # Clean cleanup sequence
     pygame.mouse.set_visible(True)
     pygame.mixer.quit()
     pygame.quit()
